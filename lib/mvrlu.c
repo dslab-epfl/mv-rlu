@@ -1525,6 +1525,18 @@ void mvrlu_abort(mvrlu_thread_struct_t *self)
 }
 EXPORT_SYMBOL(mvrlu_abort);
 
+// Check if the obj lock is held by the same thread to update the obj
+static inline int is_lock_held_by_self(mvrlu_thread_struct_t *self,
+                                       volatile void *lock) {
+
+	unsigned char *log_space_start = (unsigned char *)(self->log.buffer);
+	unsigned char *log_space_end = log_space_start + MVRLU_LOG_SIZE;
+	unsigned char *_lock = (unsigned char *)lock;
+	return (log_space_start <= _lock) && (_lock < log_space_end);
+	// TODO: check if the pending obj_size is 0 (in the case of try_lock_const),
+	// otherwise the reader sees a copy of the obj which is actually garbage...
+}
+
 void *mvrlu_deref(mvrlu_thread_struct_t *self, void *obj)
 {
 	volatile void *p_act, *p_copy, *p_lock;
@@ -1544,11 +1556,8 @@ void *mvrlu_deref(mvrlu_thread_struct_t *self, void *obj)
 	// In our case objs can be accessed across data structure operations...
 	ahs = vobj_to_ahs(p_act);
 	p_lock = ahs->act_hdr.p_lock;
-	if (p_lock) {
-		if (self == chs_to_thread(vobj_to_chs(p_lock))) {
-			return (void *)p_lock;
-		}
-	}
+	if (is_lock_held_by_self(self, p_lock))
+		return (void *)p_lock;
 
 	p_copy = vobj_to_obj_hdr(p_act)->p_copy;
 	if (unlikely(p_copy)) {
@@ -1590,7 +1599,7 @@ int _mvrlu_try_lock(mvrlu_thread_struct_t *self, void **pp_obj, size_t size)
 	p_lock = ahs->act_hdr.p_lock;
 	if (unlikely(p_lock)) {
 #ifdef MVRLU_NESTED_LOCKING
-		if (self == chs_to_thread(vobj_to_chs(p_lock))) {
+		if (is_lock_held_by_self(self, p_lock)) {
 			/* If the lock is acquired by the same thread,
 			 * allow to lock again according to the original
 			 * RLU semantics.
