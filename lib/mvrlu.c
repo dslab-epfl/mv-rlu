@@ -1527,9 +1527,8 @@ EXPORT_SYMBOL(mvrlu_abort);
 
 void *mvrlu_deref(mvrlu_thread_struct_t *self, void *obj)
 {
-	volatile void *p_act, *p_copy, *p_lock;
+	volatile void *p_act, *p_copy;
 	mvrlu_cpy_hdr_struct_t *chs;
-	mvrlu_act_hdr_struct_t *ahs;
 	unsigned long wrt_clk;
 	unsigned long qp_clk2;
 
@@ -1539,16 +1538,6 @@ void *mvrlu_deref(mvrlu_thread_struct_t *self, void *obj)
 	p_act = get_act_obj(obj);
 	mvrlu_assert(p_act && vobj_to_obj_hdr(p_act)->type == TYPE_ACTUAL);
 	self->num_act_obj++;
-
-	// Return pending version if the obj is locked by the same thread.
-	// In our case objs can be accessed across data structure operations...
-	ahs = vobj_to_ahs(p_act);
-	p_lock = ahs->act_hdr.p_lock;
-	if (p_lock) {
-		if (self == chs_to_thread(vobj_to_chs(p_lock))) {
-			return (void *)p_lock;
-		}
-	}
 
 	p_copy = vobj_to_obj_hdr(p_act)->p_copy;
 	if (unlikely(p_copy)) {
