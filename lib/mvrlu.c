@@ -1566,8 +1566,10 @@ void *mvrlu_deref(mvrlu_thread_struct_t *self, void *obj)
 		do {
 			chs = vobj_to_chs(p_copy);
 			wrt_clk = get_wrt_clk(chs);
-			if (lte_clock(wrt_clk, self->local_clk))
+			if (lte_clock(wrt_clk, self->local_clk)) {
+				mvrlu_assert(vobj_to_chs(p_copy)->cpy_hdr.p_act == p_act);
 				return (void *)p_copy;
+			}
 
 			if (unlikely(lte_clock(chs->cpy_hdr.wrt_clk_next,
 					       qp_clk2)))
