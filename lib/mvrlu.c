@@ -1221,10 +1221,13 @@ static int qp_thread_main(void *arg)
 #else
 static void *qp_thread_main(void *arg)
 {
+	mvrlu_qp_thread_t *qp_thread = arg;
+	int cpuid = qp_thread->cpuid;
+
 	cpu_set_t cpuset;
 	pthread_t thread = pthread_self();
 	CPU_ZERO(&cpuset);
-	CPU_SET(46, &cpuset);
+	CPU_SET(cpuid, &cpuset);
 	pthread_setaffinity_np(thread, sizeof(cpu_set_t), &cpuset);
 
 	__qp_thread_main(arg);
@@ -1283,7 +1286,7 @@ static inline int wakeup_qp_thread_for_reclaim(void)
  * External APIs
  */
 
-int __init mvrlu_init(void)
+int __init mvrlu_init(int cpuid)
 {
 	static int init = 0;
 	int rc;
@@ -1307,6 +1310,7 @@ int __init mvrlu_init(void)
 		return rc;
 	}
 	rc = init_qp_thread(&g_qp_thread);
+	g_qp_thread.cpuid = cpuid;
 	if (rc) {
 		mvrlu_trace_global("Fail to initialize a qp thread\n");
 		return rc;

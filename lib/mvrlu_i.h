@@ -170,6 +170,7 @@ typedef struct mvrlu_qp_thread {
 	struct completion cond;
 #else
 	pthread_t thread;
+	int cpuid;
 	intptr_t completion;
 	pthread_mutex_t cond_mutex;
 	pthread_cond_t cond;
