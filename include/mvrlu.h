@@ -22,7 +22,7 @@ typedef struct mvrlu_thread_struct mvrlu_thread_struct_t;
 /*
  * MV-RLU API
  */
-int mvrlu_init(void);
+int mvrlu_init(int cpuid);
 void mvrlu_finish(void);
 void mvrlu_print_stats(void);
 
@@ -144,7 +144,7 @@ static inline void kmvrlu_flush_log(void)
  */
 typedef mvrlu_thread_struct_t rlu_thread_data_t;
 
-#define RLU_INIT() mvrlu_init()
+#define RLU_INIT(cpuid) mvrlu_init(cpuid)
 #define RLU_FINISH() mvrlu_finish()
 #define RLU_PRINT_STATS() mvrlu_print_stats()
 
