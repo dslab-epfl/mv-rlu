@@ -37,6 +37,7 @@ void *mvrlu_alloc_x(size_t size, unsigned int flags);
 void mvrlu_free(mvrlu_thread_struct_t *self, void *p_obj);
 
 void mvrlu_reader_lock(mvrlu_thread_struct_t *self);
+int mvrlu_read_validation(mvrlu_thread_struct_t *self);
 void mvrlu_reader_unlock(mvrlu_thread_struct_t *self);
 void mvrlu_abort(mvrlu_thread_struct_t *self);
 

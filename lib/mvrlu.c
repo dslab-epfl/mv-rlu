@@ -21,6 +21,15 @@ static mvrlu_qp_thread_t g_qp_thread ____cacheline_aligned2;
 static mvrlu_stat_t g_stat ____cacheline_aligned2;
 #endif
 
+#define MAX_READ_SET_SIZE 1024
+typedef struct mvrlu_read_set {
+	mvrlu_act_hdr_struct_t *ahs;
+	unsigned long wrt_clk;
+} mvrlu_read_set_t;
+
+static __thread mvrlu_read_set_t read_set[MAX_READ_SET_SIZE];
+static __thread int read_set_size;
+
 /*
  * Forward declarations
  */
@@ -1434,6 +1443,9 @@ EXPORT_SYMBOL(mvrlu_free);
 
 void mvrlu_reader_lock(mvrlu_thread_struct_t *self)
 {
+	/* Initialize read set */
+	read_set_size = 0;
+
 	/* Secure a large enough log space */
 	if (unlikely(self->log.need_reclaim))
 		log_reclaim(&self->log);
@@ -1462,6 +1474,50 @@ void mvrlu_reader_lock(mvrlu_thread_struct_t *self)
 	mvrlu_assert(self->free_ptrs.num_ptrs == 0);
 }
 EXPORT_SYMBOL(mvrlu_reader_lock);
+
+// Check if the obj lock is held by the same thread to update the obj
+static inline int is_lock_held_by_self(mvrlu_thread_struct_t *self,
+                                       volatile void *lock) {
+
+	unsigned char *log_space_start = (unsigned char *)(self->log.buffer);
+	unsigned char *log_space_end = log_space_start + MVRLU_LOG_SIZE;
+	unsigned char *_lock = (unsigned char *)lock;
+	return (log_space_start <= _lock) && (_lock < log_space_end);
+	// TODO: check if the pending obj_size is 0 (in the case of try_lock_const),
+	// otherwise the reader sees a copy of the obj which is actually garbage...
+}
+
+int mvrlu_read_validation(mvrlu_thread_struct_t *self)
+{
+	// Make sure all previous writes are visible before validation
+	smp_mb();
+	// Validation
+	for (int i = 0; i < read_set_size; i++) {
+		unsigned long wrt_clk;
+		volatile void *p_copy;
+		mvrlu_act_hdr_struct_t *ahs = read_set[i].ahs;
+	 	volatile void *p_lock = ahs->act_hdr.p_lock;
+		if (unlikely(p_lock)) {
+			// no conflict yet if an obj is locked by the same thread
+			// need to check copy object versions
+			if (!is_lock_held_by_self(self, p_lock))
+				return 0;
+		}
+
+		// TODO: do we need a read barrier here?
+
+		wrt_clk = read_set[i].wrt_clk;
+		p_copy = ahs->obj_hdr.p_copy;
+		if (p_copy) {
+			mvrlu_cpy_hdr_struct_t *chs = vobj_to_chs(p_copy);
+			if (get_wrt_clk(chs) != wrt_clk)
+				return 0;
+		}
+	}
+
+	return 1;
+}
+EXPORT_SYMBOL(mvrlu_read_validation);
 
 void mvrlu_reader_unlock(mvrlu_thread_struct_t *self)
 {
@@ -1529,18 +1585,6 @@ void mvrlu_abort(mvrlu_thread_struct_t *self)
 }
 EXPORT_SYMBOL(mvrlu_abort);
 
-// Check if the obj lock is held by the same thread to update the obj
-static inline int is_lock_held_by_self(mvrlu_thread_struct_t *self,
-                                       volatile void *lock) {
-
-	unsigned char *log_space_start = (unsigned char *)(self->log.buffer);
-	unsigned char *log_space_end = log_space_start + MVRLU_LOG_SIZE;
-	unsigned char *_lock = (unsigned char *)lock;
-	return (log_space_start <= _lock) && (_lock < log_space_end);
-	// TODO: check if the pending obj_size is 0 (in the case of try_lock_const),
-	// otherwise the reader sees a copy of the obj which is actually garbage...
-}
-
 void *mvrlu_deref(mvrlu_thread_struct_t *self, void *obj)
 {
 	volatile void *p_act, *p_copy, *p_lock;
@@ -1560,6 +1604,7 @@ void *mvrlu_deref(mvrlu_thread_struct_t *self, void *obj)
 	// In our case objs can be accessed across data structure operations...
 	ahs = vobj_to_ahs(p_act);
 	p_lock = ahs->act_hdr.p_lock;
+	// Do not add to read set in this case since it's also in the write set
 	if (is_lock_held_by_self(self, p_lock))
 		return (void *)p_lock;
 
@@ -1570,8 +1615,12 @@ void *mvrlu_deref(mvrlu_thread_struct_t *self, void *obj)
 		do {
 			chs = vobj_to_chs(p_copy);
 			wrt_clk = get_wrt_clk(chs);
-			if (lte_clock(wrt_clk, self->local_clk))
+			if (lte_clock(wrt_clk, self->local_clk)) {
+				read_set[read_set_size].ahs = ahs; 
+				read_set[read_set_size].wrt_clk = wrt_clk;
+				read_set_size++;
 				return (void *)p_copy;
+			}
 
 			if (unlikely(lte_clock(chs->cpy_hdr.wrt_clk_next,
 					       qp_clk2)))
@@ -1579,6 +1628,11 @@ void *mvrlu_deref(mvrlu_thread_struct_t *self, void *obj)
 			p_copy = chs->obj_hdr.p_copy;
 		} while (p_copy);
 	}
+
+	read_set[read_set_size].ahs = ahs;
+	// Mark reads that return act obj 
+	read_set[read_set_size].wrt_clk = MIN_VERSION;
+	read_set_size++;
 	return (void *)p_act;
 }
 EXPORT_SYMBOL(mvrlu_deref);
