@@ -1519,8 +1519,12 @@ int mvrlu_read_validation(mvrlu_thread_struct_t *self)
 }
 EXPORT_SYMBOL(mvrlu_read_validation);
 
-void mvrlu_reader_unlock(mvrlu_thread_struct_t *self)
+int mvrlu_reader_unlock(mvrlu_thread_struct_t *self)
 {
+	if (self->is_write_detected)
+		if (!mvrlu_read_validation(self))
+			return 0;
+
 	/* Object data writes should not be reordered with metadata writes. */
 	smp_wmb_tso();
 
@@ -1557,6 +1561,8 @@ void mvrlu_reader_unlock(mvrlu_thread_struct_t *self)
 	stat_thread_inc(self, n_finish);
 	mvrlu_assert(self->log.cur_wrt_set == NULL);
 	mvrlu_assert(self->free_ptrs.num_ptrs == 0);
+
+	return 1;
 }
 EXPORT_SYMBOL(mvrlu_reader_unlock);
 
