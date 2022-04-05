@@ -1821,7 +1821,7 @@ static void print_config(void)
 EXPORT_SYMBOL(mvrlu_print_stats);
 
 void mvrlu_merge_stats(mvrlu_thread_struct_t *self) {
-    printf(" n_txs: %ld\n", self->stat.cnt[0]);
-    printf("aborts: %ld\n", self->stat.cnt[2]);
+    // printf(" n_txs: %ld\n", self->stat.cnt[0]);
+    // printf("aborts: %ld\n", self->stat.cnt[2]);
     stat_thread_merge(self);
 }
