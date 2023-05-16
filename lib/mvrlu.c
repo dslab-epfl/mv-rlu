@@ -1825,3 +1825,11 @@ void mvrlu_merge_stats(mvrlu_thread_struct_t *self) {
     // printf("aborts: %ld\n", self->stat.cnt[2]);
     stat_thread_merge(self);
 }
+
+uint16_t mvrlu_profiler_get_curr_op(mvrlu_thread_struct_t *self) {
+	return self->curr_op;
+}
+
+void mvrlu_profiler_inc_curr_op(mvrlu_thread_struct_t *self, uint16_t ds_op_info_cache_size) {
+	self->curr_op = (self->curr_op + 1) & (ds_op_info_cache_size - 1);
+}

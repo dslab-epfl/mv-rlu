@@ -4,6 +4,8 @@
 #include "config.h"
 #include "debug.h"
 
+#include <stdint.h>
+
 #define MAX_VERSION (ULONG_MAX - 1)
 #define MIN_VERSION (0ul)
 
@@ -123,6 +125,7 @@ typedef struct mvrlu_thread_struct {
 #ifdef MVRLU_ENABLE_STATS
 	mvrlu_stat_t stat;
 #endif
+	uint16_t curr_op;
 
 	long __padding_1[MVRLU_DEFAULT_PADDING];
 
