@@ -1358,10 +1358,18 @@ void mvrlu_thread_free(mvrlu_thread_struct_t *self)
 }
 EXPORT_SYMBOL(mvrlu_thread_free);
 
+#ifdef MVRLU_PROFILER
+void mvrlu_thread_init(mvrlu_thread_struct_t *self, uint16_t thr_id)
+#else
 void mvrlu_thread_init(mvrlu_thread_struct_t *self)
+#endif
 {
 	/* Zero out self */
 	memset(self, 0, sizeof(*self));
+
+#ifdef MVRLU_PROFILER
+	self->thr_id = thr_id;
+#endif
 
 	/* Allocate cacheline-aligned log space */
 	self->log.buffer = port_alloc_log_mem();
@@ -1827,9 +1835,16 @@ void mvrlu_merge_stats(mvrlu_thread_struct_t *self) {
 }
 
 uint16_t mvrlu_profiler_get_curr_op(mvrlu_thread_struct_t *self) {
+#ifdef MVRLU_PROFILER
 	return self->curr_op;
+#else
+	// temp hack: this func shouldn't be used with MVRLU_PROFILER disabled
+	return 0;
+#endif
 }
 
 void mvrlu_profiler_inc_curr_op(mvrlu_thread_struct_t *self, uint16_t ds_op_info_cache_size) {
+#ifdef MVRLU_PROFILER
 	self->curr_op = (self->curr_op + 1) & (ds_op_info_cache_size - 1);
+#endif
 }

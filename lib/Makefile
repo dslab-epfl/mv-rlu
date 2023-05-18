@@ -19,6 +19,9 @@ CFLAGS += -Winline -Werror -Wall -Wextra -Wshadow -Wdeclaration-after-statement
 CFLAGS += -Wno-unused-parameter -Wno-unused-value
 CFLAGS += -Wno-unused-function -Wno-packed-not-aligned
 # CFALGS += -DMVRLU_DISABLE_ADDR_ACTUAL_TYPE_CHECKING
+ifdef MVRLU_PROFILER
+  CFLAGS += -DMVRLU_PROFILER
+endif
 
 LDFLAGS += -lpthread $(MEMMGR)
 

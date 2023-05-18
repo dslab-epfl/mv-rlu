@@ -30,7 +30,11 @@ void mvrlu_merge_stats(mvrlu_thread_struct_t *self);
 mvrlu_thread_struct_t *mvrlu_thread_alloc(void);
 void mvrlu_thread_free(mvrlu_thread_struct_t *self);
 
+#ifdef MVRLU_PROFILER
+void mvrlu_thread_init(mvrlu_thread_struct_t *self, uint16_t thr_id);
+#else
 void mvrlu_thread_init(mvrlu_thread_struct_t *self);
+#endif
 void mvrlu_thread_finish(mvrlu_thread_struct_t *self);
 
 void *mvrlu_alloc(size_t size);
@@ -156,7 +160,11 @@ typedef mvrlu_thread_struct_t rlu_thread_data_t;
 #define RLU_THREAD_ALLOC() mvrlu_thread_alloc()
 #define RLU_THREAD_FREE(self) mvrlu_thread_free(self)
 
+#ifdef MVRLU_PROFILER
+#define RLU_THREAD_INIT(self, thr_id) mvrlu_thread_init(self, thr_id)
+#else
 #define RLU_THREAD_INIT(self) mvrlu_thread_init(self)
+#endif
 #define RLU_THREAD_FINISH(self) mvrlu_thread_finish(self)
 
 #define RLU_READER_LOCK(self) mvrlu_reader_lock(self)

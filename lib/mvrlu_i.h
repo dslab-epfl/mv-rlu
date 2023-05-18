@@ -125,7 +125,10 @@ typedef struct mvrlu_thread_struct {
 #ifdef MVRLU_ENABLE_STATS
 	mvrlu_stat_t stat;
 #endif
+#ifdef MVRLU_PROFILER
 	uint16_t curr_op;
+	uint16_t thr_id;
+#endif
 
 	long __padding_1[MVRLU_DEFAULT_PADDING];
 
