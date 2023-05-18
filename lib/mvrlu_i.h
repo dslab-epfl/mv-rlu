@@ -62,6 +62,10 @@ typedef struct mvrlu_cpy_hdr {
 	volatile unsigned long wrt_clk_next;
 	volatile unsigned long __wrt_clk;
 	volatile void *p_act;
+#ifdef MVRLU_PROFILER
+	volatile uint16_t thr_id;
+	volatile uint16_t op;
+#endif
 } ____ptr_aligned mvrlu_cpy_hdr_t;
 
 typedef struct mvrlu_act_hdr_struct {
@@ -128,6 +132,8 @@ typedef struct mvrlu_thread_struct {
 #ifdef MVRLU_PROFILER
 	uint16_t curr_op;
 	uint16_t thr_id;
+	uint16_t conflict_op;
+	uint16_t conflict_thr_id;
 #endif
 
 	long __padding_1[MVRLU_DEFAULT_PADDING];

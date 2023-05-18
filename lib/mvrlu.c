@@ -423,6 +423,56 @@ static inline unsigned long get_wrt_clk(const mvrlu_cpy_hdr_struct_t *chs)
 	return wrt_clk;
 }
 
+#ifdef MVRLU_PROFILER
+static int try_lock_obj(mvrlu_thread_struct_t *self, mvrlu_act_hdr_struct_t *ahs,
+			volatile void *p_old_copy, volatile void *p_new_copy)
+{
+	int ret;
+	mvrlu_cpy_hdr_struct_t *conflict_chs;
+	volatile void *p_lock;
+	volatile void *p_act_old_copy;
+
+	p_lock = ahs->act_hdr.p_lock;
+	if (p_lock != NULL) {
+		conflict_chs = vobj_to_chs(p_lock);
+		self->conflict_thr_id = conflict_chs->cpy_hdr.thr_id;
+		self->conflict_op = conflict_chs->cpy_hdr.op;
+		return 0;
+	}
+
+	p_act_old_copy = ahs->obj_hdr.p_copy;
+	if (p_act_old_copy != p_old_copy) {
+		conflict_chs = vobj_to_chs(p_act_old_copy);
+		self->conflict_thr_id = conflict_chs->cpy_hdr.thr_id;
+		self->conflict_op = conflict_chs->cpy_hdr.op;
+		return 0;
+	}
+
+	ret = smp_cas_v(&ahs->act_hdr.p_lock, NULL, p_new_copy, p_lock);
+	if (!ret) {
+		conflict_chs = vobj_to_chs(p_lock);
+		self->conflict_thr_id = conflict_chs->cpy_hdr.thr_id;
+		self->conflict_op = conflict_chs->cpy_hdr.op;
+		return 0; /* smp_cas() failed */
+	}
+
+	p_act_old_copy = ahs->obj_hdr.p_copy;
+	if (unlikely(p_act_old_copy != p_old_copy)) {
+		/* If it is ABA, unlock and return false */
+		smp_wmb();
+		ahs->act_hdr.p_lock = NULL;
+
+		conflict_chs = vobj_to_chs(p_act_old_copy);
+		self->conflict_thr_id = conflict_chs->cpy_hdr.thr_id;
+		self->conflict_op = conflict_chs->cpy_hdr.op;
+		return 0;
+	}
+
+	/* Finally succeeded. Updating p_copy of p_new_copy
+	 * will be done upon commit. */
+	return 1;
+}
+#else
 static int try_lock_obj(mvrlu_act_hdr_struct_t *ahs, volatile void *p_old_copy,
 			volatile void *p_new_copy)
 {
@@ -446,6 +496,7 @@ static int try_lock_obj(mvrlu_act_hdr_struct_t *ahs, volatile void *p_old_copy,
 	 * will be done upon commit. */
 	return 1;
 }
+#endif
 
 static void try_detach_obj(mvrlu_cpy_hdr_struct_t *chs)
 {
@@ -1656,8 +1707,18 @@ int _mvrlu_try_lock(mvrlu_thread_struct_t *self, void **pp_obj, size_t size)
 	volatile void *p_act, *p_lock, *p_old_copy, *p_new_copy;
 	mvrlu_act_hdr_struct_t *ahs;
 	mvrlu_cpy_hdr_struct_t *chs;
+
+#ifdef MVRLU_PROFILER
+	mvrlu_cpy_hdr_struct_t *conflict_chs;
+#endif
+
 	void *obj;
 	int bogus_allocated;
+
+#ifdef MVRLU_PROFILER
+	uint16_t thr_id = self->thr_id;
+	uint16_t curr_op = self->curr_op;
+#endif
 
 	obj = *pp_obj;
 	mvrlu_warning(obj != NULL);
@@ -1684,6 +1745,12 @@ int _mvrlu_try_lock(mvrlu_thread_struct_t *self, void **pp_obj, size_t size)
 			return 1;
 		}
 #endif
+
+#ifdef MVRLU_PROFILER
+		conflict_chs = vobj_to_chs(p_lock);
+		self->conflict_thr_id = conflict_chs->cpy_hdr.thr_id;
+		self->conflict_op = conflict_chs->cpy_hdr.op;
+#endif
 		return 0;
 	}
 
@@ -1699,16 +1766,33 @@ int _mvrlu_try_lock(mvrlu_thread_struct_t *self, void **pp_obj, size_t size)
 		chs = vobj_to_chs(p_old_copy);
 		/* It guarantees that clock gap between two versions of
 		 * an object is greater than 2x ORDO_BOUNDARY. */
+#ifdef MVRLU_PROFILER
+		if (!lte_clock(get_wrt_clk(chs), self->local_clk)) {
+			conflict_chs = chs;
+			self->conflict_thr_id = conflict_chs->cpy_hdr.thr_id;
+			self->conflict_op = conflict_chs->cpy_hdr.op;
+			return 0;
+		}
+#else
 		if (!lte_clock(get_wrt_clk(chs), self->local_clk))
 			return 0;
+#endif
 	}
 
 	/* Secure log space and initialize a header */
 	chs = log_append_begin(&self->log, p_act, size, &bogus_allocated);
+#ifdef MVRLU_PROFILER
+	chs->cpy_hdr.thr_id = thr_id;
+	chs->cpy_hdr.op = curr_op;
+#endif
 	p_new_copy = (volatile void *)chs->obj_hdr.obj;
 
 	/* Try lock */
+#ifdef MVRLU_PROFILER
+	if (!try_lock_obj(self, ahs, p_old_copy, p_new_copy)) {
+#else
 	if (!try_lock_obj(ahs, p_old_copy, p_new_copy)) {
+#endif
 		log_append_abort(&self->log, chs);
 		return 0;
 	}
