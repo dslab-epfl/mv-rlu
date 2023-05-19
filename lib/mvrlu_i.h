@@ -134,6 +134,8 @@ typedef struct mvrlu_thread_struct {
 	uint16_t thr_id;
 	uint16_t conflict_op;
 	uint16_t conflict_thr_id;
+	// tmp hack
+	int has_conflict_info;
 #endif
 
 	long __padding_1[MVRLU_DEFAULT_PADDING];

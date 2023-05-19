@@ -446,9 +446,15 @@ static int try_lock_obj(mvrlu_thread_struct_t *self, mvrlu_act_hdr_struct_t *ahs
 
 	p_act_old_copy = ahs->obj_hdr.p_copy;
 	if (p_act_old_copy != p_old_copy) {
-		conflict_chs = vobj_to_chs(p_act_old_copy);
-		self->conflict_thr_id = conflict_chs->cpy_hdr.thr_id;
-		self->conflict_op = conflict_chs->cpy_hdr.op;
+
+		// tmp hack: will miss some conflicts
+		if (p_act_old_copy) {
+			conflict_chs = vobj_to_chs(p_act_old_copy);
+			self->conflict_thr_id = conflict_chs->cpy_hdr.thr_id;
+			self->conflict_op = conflict_chs->cpy_hdr.op;
+		} else {
+			self->has_conflict_info = 0;
+		}
 		return 0;
 	}
 
@@ -466,9 +472,14 @@ static int try_lock_obj(mvrlu_thread_struct_t *self, mvrlu_act_hdr_struct_t *ahs
 		smp_wmb();
 		ahs->act_hdr.p_lock = NULL;
 
-		conflict_chs = vobj_to_chs(p_act_old_copy);
-		self->conflict_thr_id = conflict_chs->cpy_hdr.thr_id;
-		self->conflict_op = conflict_chs->cpy_hdr.op;
+		// tmp hack: will miss some conflicts
+		if (p_act_old_copy) {
+			conflict_chs = vobj_to_chs(p_act_old_copy);
+			self->conflict_thr_id = conflict_chs->cpy_hdr.thr_id;
+			self->conflict_op = conflict_chs->cpy_hdr.op;
+		} else {
+			self->has_conflict_info = 0;
+		}
 		return 0;
 	}
 
@@ -1506,6 +1517,9 @@ EXPORT_SYMBOL(mvrlu_free);
 
 void mvrlu_reader_lock(mvrlu_thread_struct_t *self)
 {
+#ifdef MVRLU_PROFILER
+	self->has_conflict_info = 1;
+#endif
 	/* Initialize read set */
 	read_set_size = 0;
 
