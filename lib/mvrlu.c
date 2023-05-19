@@ -25,6 +25,10 @@ static mvrlu_stat_t g_stat ____cacheline_aligned2;
 typedef struct mvrlu_read_set {
 	mvrlu_act_hdr_struct_t *ahs;
 	unsigned long wrt_clk;
+#ifdef MVRLU_PROFILER
+	uint16_t thr_id;
+	uint16_t op;
+#endif
 } mvrlu_read_set_t;
 
 static __thread mvrlu_read_set_t read_set[MAX_READ_SET_SIZE];
@@ -1555,12 +1559,27 @@ int mvrlu_read_validation(mvrlu_thread_struct_t *self)
 		unsigned long wrt_clk;
 		volatile void *p_copy;
 		mvrlu_act_hdr_struct_t *ahs = read_set[i].ahs;
+
+#ifdef MVRLU_PROFILER
+		mvrlu_cpy_hdr_struct_t *conflict_chs;
+#endif
 	 	volatile void *p_lock = ahs->act_hdr.p_lock;
 		if (unlikely(p_lock)) {
 			// no conflict yet if an obj is locked by the same thread
 			// need to check copy object versions
+#ifdef MVRLU_PROFILER
+			if (!is_lock_held_by_self(self, p_lock)) {
+				self->thr_id = read_set[i].thr_id;
+				self->curr_op = read_set[i].op;
+				conflict_chs = vobj_to_chs(p_lock);
+				self->conflict_thr_id = conflict_chs->cpy_hdr.thr_id;
+				self->conflict_op = conflict_chs->cpy_hdr.op;
+				return 0;
+			}
+#else
 			if (!is_lock_held_by_self(self, p_lock))
 				return 0;
+#endif
 		}
 
 		// TODO: do we need a read barrier here?
@@ -1569,8 +1588,19 @@ int mvrlu_read_validation(mvrlu_thread_struct_t *self)
 		p_copy = ahs->obj_hdr.p_copy;
 		if (p_copy) {
 			mvrlu_cpy_hdr_struct_t *chs = vobj_to_chs(p_copy);
+#ifdef MVRLU_PROFILER
+			if (get_wrt_clk(chs) != wrt_clk) {
+				self->thr_id = read_set[i].thr_id;
+				self->curr_op = read_set[i].op;
+				conflict_chs = chs;
+				self->conflict_thr_id = conflict_chs->cpy_hdr.thr_id;
+				self->conflict_op = conflict_chs->cpy_hdr.op;
+				return 0;
+			}
+#else
 			if (get_wrt_clk(chs) != wrt_clk)
 				return 0;
+#endif
 		}
 	}
 
@@ -1683,6 +1713,10 @@ void *mvrlu_deref(mvrlu_thread_struct_t *self, void *obj)
 			if (lte_clock(wrt_clk, self->local_clk)) {
 				read_set[read_set_size].ahs = ahs; 
 				read_set[read_set_size].wrt_clk = wrt_clk;
+#ifdef MVRLU_PROFILER
+				read_set[read_set_size].thr_id = self->thr_id;
+				read_set[read_set_size].op = self->curr_op;
+#endif
 				read_set_size++;
 				return (void *)p_copy;
 			}
@@ -1697,6 +1731,10 @@ void *mvrlu_deref(mvrlu_thread_struct_t *self, void *obj)
 	read_set[read_set_size].ahs = ahs;
 	// Mark reads that return act obj 
 	read_set[read_set_size].wrt_clk = MIN_VERSION;
+#ifdef MVRLU_PROFILER
+	read_set[read_set_size].thr_id = self->thr_id;
+	read_set[read_set_size].op = self->curr_op;
+#endif
 	read_set_size++;
 	return (void *)p_act;
 }
