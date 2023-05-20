@@ -131,6 +131,7 @@ typedef struct mvrlu_thread_struct {
 #endif
 #ifdef MVRLU_PROFILER
 	uint16_t curr_op;
+	uint16_t local_op;
 	uint16_t thr_id;
 	uint16_t conflict_op;
 	uint16_t conflict_thr_id;

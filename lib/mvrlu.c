@@ -26,7 +26,6 @@ typedef struct mvrlu_read_set {
 	mvrlu_act_hdr_struct_t *ahs;
 	unsigned long wrt_clk;
 #ifdef MVRLU_PROFILER
-	uint16_t thr_id;
 	uint16_t op;
 #endif
 } mvrlu_read_set_t;
@@ -1583,8 +1582,7 @@ int mvrlu_read_validation(mvrlu_thread_struct_t *self)
 			// need to check copy object versions
 #ifdef MVRLU_PROFILER
 			if (!is_lock_held_by_self(self, p_lock)) {
-				self->thr_id = read_set[i].thr_id;
-				self->curr_op = read_set[i].op;
+				self->local_op = read_set[i].op;
 				conflict_chs = vobj_to_chs(p_lock);
 				self->conflict_thr_id = conflict_chs->cpy_hdr.thr_id;
 				self->conflict_op = conflict_chs->cpy_hdr.op;
@@ -1604,8 +1602,7 @@ int mvrlu_read_validation(mvrlu_thread_struct_t *self)
 			mvrlu_cpy_hdr_struct_t *chs = vobj_to_chs(p_copy);
 #ifdef MVRLU_PROFILER
 			if (get_wrt_clk(chs) != wrt_clk) {
-				self->thr_id = read_set[i].thr_id;
-				self->curr_op = read_set[i].op;
+				self->local_op = read_set[i].op;
 				conflict_chs = chs;
 				self->conflict_thr_id = conflict_chs->cpy_hdr.thr_id;
 				self->conflict_op = conflict_chs->cpy_hdr.op;
@@ -1728,7 +1725,6 @@ void *mvrlu_deref(mvrlu_thread_struct_t *self, void *obj)
 				read_set[read_set_size].ahs = ahs; 
 				read_set[read_set_size].wrt_clk = wrt_clk;
 #ifdef MVRLU_PROFILER
-				read_set[read_set_size].thr_id = self->thr_id;
 				read_set[read_set_size].op = self->curr_op;
 #endif
 				read_set_size++;
@@ -1746,7 +1742,6 @@ void *mvrlu_deref(mvrlu_thread_struct_t *self, void *obj)
 	// Mark reads that return act obj 
 	read_set[read_set_size].wrt_clk = MIN_VERSION;
 #ifdef MVRLU_PROFILER
-	read_set[read_set_size].thr_id = self->thr_id;
 	read_set[read_set_size].op = self->curr_op;
 #endif
 	read_set_size++;
@@ -1770,6 +1765,8 @@ int _mvrlu_try_lock(mvrlu_thread_struct_t *self, void **pp_obj, size_t size)
 #ifdef MVRLU_PROFILER
 	uint16_t thr_id = self->thr_id;
 	uint16_t curr_op = self->curr_op;
+	// sync local_op since it might be changed due to R-W conflict
+	self->local_op = self->curr_op;
 #endif
 
 	obj = *pp_obj;
@@ -1982,5 +1979,22 @@ uint16_t mvrlu_profiler_get_curr_op(mvrlu_thread_struct_t *self) {
 void mvrlu_profiler_inc_curr_op(mvrlu_thread_struct_t *self, uint16_t ds_op_info_cache_size) {
 #ifdef MVRLU_PROFILER
 	self->curr_op = (self->curr_op + 1) & (ds_op_info_cache_size - 1);
+#endif
+}
+
+int mvrlu_profiler_get_confict_ops(mvrlu_thread_struct_t *self,
+									uint16_t *thr_id_out, uint16_t *op_out,
+									uint16_t *conflict_thr_id_out, uint16_t *conflict_op_out) {
+#ifdef MVRLU_PROFILER
+	if (self->has_conflict_info) {
+		*thr_id_out = self->thr_id;
+		*op_out = self->local_op;
+		*conflict_thr_id_out = self->conflict_thr_id;
+		*conflict_op_out = self->conflict_op;
+	}
+	return self->has_conflict_info;
+#else
+	// temp hack: this func shouldn't be used with MVRLU_PROFILER disabled
+	return 0;
 #endif
 }
