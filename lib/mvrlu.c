@@ -652,6 +652,10 @@ static mvrlu_cpy_hdr_struct_t *log_alloc(mvrlu_log_t *log,
 	if (log_index(log->tail_cnt + log_size) < log_index(log->tail_cnt)) {
 		unsigned int bogus_size;
 
+#ifdef MVRLU_PROFILER
+		printf("profiler warning: log exhausted!\n");
+#endif
+
 		chs = log_at(log, log->tail_cnt);
 		memset(chs, 0, sizeof(*chs));
 		bogus_size = MVRLU_LOG_SIZE - log_index(log->tail_cnt);
@@ -974,6 +978,10 @@ static void log_reclaim(mvrlu_log_t *log)
 	unsigned int index;
 	int reclaim;
 	int try_writeback;
+
+#ifdef MVRLU_PROFILER
+	printf("profiler warning: reclaim happening!\n");
+#endif
 
 	if (!log->need_reclaim)
 		return;
@@ -1522,6 +1530,7 @@ void mvrlu_reader_lock(mvrlu_thread_struct_t *self)
 	/* Initialize read set */
 	read_set_size = 0;
 
+#ifndef MVRLU_PROFILER
 	/* Secure a large enough log space */
 	if (unlikely(self->log.need_reclaim))
 		log_reclaim(&self->log);
@@ -1532,6 +1541,7 @@ void mvrlu_reader_lock(mvrlu_thread_struct_t *self)
 			stat_thread_inc(self, n_high_mark_block);
 		} while (log_used(&self->log) >= MVRLU_LOG_HIGH_MARK);
 	}
+#endif
 
 	/* Object data writes should not be reordered with metadata writes. */
 	smp_wmb_tso();
@@ -1631,12 +1641,14 @@ int mvrlu_reader_unlock(mvrlu_thread_struct_t *self)
 	mvrlu_assert(self->run_cnt & 0x1);
 	self->run_cnt++;
 
+#ifndef MVRLU_PROFILER
 	/* If dereference takes too much overhead, reclaim log */
 	/* - dereference water mark */
 	if (self->num_deref && self->num_act_obj > MVRLU_DEREF_MIN_ACT_OBJ &&
 	    self->num_act_obj < (MVRLU_DEREF_MARK * self->num_deref)) {
 		wakeup_qp_thread_for_reclaim();
 	}
+#endif
 
 	/* If write or log reclaim is needed, we need write memory
 	 * barrier to avoid reordering of metadata updates. */
@@ -1647,6 +1659,7 @@ int mvrlu_reader_unlock(mvrlu_thread_struct_t *self)
 				   self->local_clk);
 		}
 
+#ifndef MVRLU_PROFILER
 		if (unlikely(self->log.need_reclaim))
 			log_reclaim(&self->log);
 
@@ -1655,6 +1668,7 @@ int mvrlu_reader_unlock(mvrlu_thread_struct_t *self)
 				stat_thread_inc(self, n_low_mark_wakeup);
 			}
 		}
+#endif
 		smp_wmb();
 	}
 
@@ -1679,8 +1693,10 @@ void mvrlu_abort(mvrlu_thread_struct_t *self)
 		self->is_write_detected = 0;
 	}
 
+#ifndef MVRLU_PROFILER
 	if (unlikely(self->log.need_reclaim))
 		log_reclaim(&self->log);
+#endif
 
 	/* Prepare next mvrlu_reader_lock() by performing memory barrier. */
 	smp_mb();

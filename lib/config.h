@@ -2,9 +2,15 @@
 #define _CONFIG_H
 #include "arch.h"
 
-#define MVRLU_LOG_SIZE (1ul << 19) /* 512KB */
-#define MVRLU_LOG_MASK (~(MVRLU_LOG_SIZE - 1))
+#ifndef MVRLU_PROFILER
 #define MVRLU_MAX_THREAD_NUM (1ul << 14) /* 16384 (2**18 * 2**14 = 2**32) */
+#define MVRLU_LOG_SIZE (1ul << 19) /* 512KB */
+#else
+#define MVRLU_MAX_THREAD_NUM 24
+#define MVRLU_LOG_SIZE (1ul << 31) /* 2GB */
+#endif
+
+#define MVRLU_LOG_MASK (~(MVRLU_LOG_SIZE - 1))
 
 #define MVRLU_MAX_FREE_PTRS 512
 #define MVRLU_QP_INTERVAL_USEC 500 /* 0.5 msec */
