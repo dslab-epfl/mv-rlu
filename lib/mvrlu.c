@@ -1983,8 +1983,9 @@ void mvrlu_merge_stats(mvrlu_thread_struct_t *self) {
     stat_thread_merge(self);
 }
 
-uint16_t mvrlu_profiler_get_curr_op(mvrlu_thread_struct_t *self) {
+uint16_t mvrlu_profiler_get_curr_op_and_txn_ts(mvrlu_thread_struct_t *self, uint64_t *txn_ts_out) {
 #ifdef MVRLU_PROFILER
+	*txn_ts_out = self->local_clk;
 	return self->curr_op;
 #else
 	// temp hack: this func shouldn't be used with MVRLU_PROFILER disabled

@@ -66,7 +66,7 @@ void mvrlu_flush_log(mvrlu_thread_struct_t *self);
 #define mvrlu_assign_ptr(self, p_ptr, p_obj)                                   \
 	_mvrlu_assign_pointer((void **)p_ptr, p_obj)
 
-uint16_t mvrlu_profiler_get_curr_op(mvrlu_thread_struct_t *self);
+uint16_t mvrlu_profiler_get_curr_op_and_txn_ts(mvrlu_thread_struct_t *self, uint64_t *txn_ts_out);
 void mvrlu_profiler_inc_curr_op(mvrlu_thread_struct_t *self, uint16_t ds_op_info_cache_size);
 int mvrlu_profiler_get_confict_ops(mvrlu_thread_struct_t *self,
 									uint16_t *thr_id_out, uint16_t *op_out,
