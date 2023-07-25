@@ -26,6 +26,8 @@ int mvrlu_init(int cpuid);
 void mvrlu_finish(void);
 void mvrlu_print_stats(void);
 void mvrlu_merge_stats(mvrlu_thread_struct_t *self);
+unsigned long mvrlu_get_n_txn_starts(mvrlu_thread_struct_t *self);
+unsigned long mvrlu_get_n_txn_aborts(mvrlu_thread_struct_t *self);
 
 mvrlu_thread_struct_t *mvrlu_thread_alloc(void);
 void mvrlu_thread_free(mvrlu_thread_struct_t *self);

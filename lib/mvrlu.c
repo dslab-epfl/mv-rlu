@@ -1983,6 +1983,14 @@ void mvrlu_merge_stats(mvrlu_thread_struct_t *self) {
     stat_thread_merge(self);
 }
 
+unsigned long mvrlu_get_n_txn_starts(mvrlu_thread_struct_t *self) {
+	return self->stat.cnt[0];
+}
+
+unsigned long mvrlu_get_n_txn_aborts(mvrlu_thread_struct_t *self) {
+	return self->stat.cnt[2];
+}
+
 uint16_t mvrlu_profiler_get_curr_op_and_txn_ts(mvrlu_thread_struct_t *self, uint64_t *txn_ts_out) {
 #ifdef MVRLU_PROFILER
 	*txn_ts_out = self->local_clk;
