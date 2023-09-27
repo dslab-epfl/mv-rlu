@@ -71,6 +71,7 @@ void mvrlu_profiler_inc_curr_op(mvrlu_thread_struct_t *self, uint16_t ds_op_info
 int mvrlu_profiler_get_confict_ops(mvrlu_thread_struct_t *self,
 									uint16_t *thr_id_out, uint16_t *op_out,
 									uint16_t *conflict_thr_id_out, uint16_t *conflict_op_out);
+unsigned long mvrlu_profiler_get_total_txns(void);
 
 /*
  * MV-RLU API for kernel

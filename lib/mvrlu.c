@@ -2015,3 +2015,8 @@ int mvrlu_profiler_get_confict_ops(mvrlu_thread_struct_t *self,
 	return 0;
 #endif
 }
+
+unsigned long mvrlu_profiler_get_total_txns(void)
+{
+	return g_stat.cnt[0];
+}
