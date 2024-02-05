@@ -54,6 +54,7 @@ static volatile unsigned long
 #define lte_clock(__t1, __t2) ((__t1) <= (__t2))
 #define get_clock() g_wrt_clk
 #define get_clock_relaxed() get_clock()
+#define get_local_clock_relaxed(__prev_wrt_clk) get_clock() 
 #define init_clock()                                                           \
 	do {                                                                   \
 		g_wrt_clk = 0;                                                 \
@@ -67,6 +68,7 @@ static volatile unsigned long
 #define lte_clock(__t1, __t2) ordo_lt_clock(__t1, __t2)
 #define get_clock() ordo_get_clock()
 #define get_clock_relaxed() ordo_get_clock_relaxed()
+#define get_local_clock_relaxed(__prev_wrt_clk) ordo_new_clock_relaxed(__prev_wrt_clk) 
 #define init_clock() ordo_clock_init()
 #define new_clock(__local_clk) ordo_new_clock((__local_clk) + ordo_boundary())
 #define advance_clock()
@@ -879,9 +881,11 @@ static void ws_unlock(mvrlu_log_t *log, unsigned long wrt_clk)
 	}
 }
 
-static void log_commit(mvrlu_log_t *log, mvrlu_free_ptrs_t *free_ptrs,
-		       unsigned long local_clk)
+static unsigned long log_commit(mvrlu_log_t *log, mvrlu_free_ptrs_t *free_ptrs,
+		       					unsigned long local_clk)
 {
+	unsigned long wrt_clk;
+
 	mvrlu_assert(log->cur_wrt_set);
 	mvrlu_assert(obj_to_chs(log->cur_wrt_set)->obj_hdr.type ==
 		     TYPE_WRT_SET);
@@ -891,7 +895,8 @@ static void log_commit(mvrlu_log_t *log, mvrlu_free_ptrs_t *free_ptrs,
 	smp_wmb();
 
 	/* Make them public atomically */
-	smp_atomic_store(&log->cur_wrt_set->wrt_clk, new_clock(local_clk));
+	wrt_clk = new_clock(local_clk);
+	smp_atomic_store(&log->cur_wrt_set->wrt_clk, wrt_clk);
 
 	/* Advance global clock */
 	advance_clock();
@@ -902,6 +907,8 @@ static void log_commit(mvrlu_log_t *log, mvrlu_free_ptrs_t *free_ptrs,
 	/* Clean up */
 	log->cur_wrt_set = NULL;
 	fp_reset(free_ptrs);
+
+	return wrt_clk;
 }
 
 static void log_abort(mvrlu_log_t *log, mvrlu_free_ptrs_t *free_ptrs)
@@ -1550,7 +1557,7 @@ void mvrlu_reader_lock(mvrlu_thread_struct_t *self)
 	smp_faa(&(self->run_cnt), 1);
 	self->num_act_obj = 0;
 	self->num_deref = 0;
-	self->local_clk = get_clock_relaxed();
+	self->local_clk = get_local_clock_relaxed(self->prev_wrt_clk);
 
 	/* Get the latest view */
 	smp_rmb();
@@ -1655,8 +1662,8 @@ int mvrlu_reader_unlock(mvrlu_thread_struct_t *self)
 	if (self->is_write_detected || self->log.need_reclaim) {
 		if (self->is_write_detected) {
 			self->is_write_detected = 0;
-			log_commit(&self->log, &self->free_ptrs,
-				   self->local_clk);
+			self->prev_wrt_clk = log_commit(&self->log, &self->free_ptrs,
+		 									self->local_clk);
 		}
 
 #ifndef MVRLU_PROFILER

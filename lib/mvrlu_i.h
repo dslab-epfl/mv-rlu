@@ -143,6 +143,7 @@ typedef struct mvrlu_thread_struct {
 
 	volatile unsigned int run_cnt;
 	volatile unsigned long local_clk;
+	volatile unsigned long prev_wrt_clk;
 	volatile int live_status;
 
 	long __padding_2[MVRLU_DEFAULT_PADDING];

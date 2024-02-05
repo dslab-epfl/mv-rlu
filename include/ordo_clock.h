@@ -85,6 +85,14 @@ static inline unsigned long ordo_new_clock(unsigned long t)
 	return new_clk;
 }
 
+static inline unsigned long ordo_new_clock_relaxed(unsigned long t)
+{
+	unsigned long new_clk;
+
+	while (!ordo_gt_clock(new_clk = ordo_get_clock_relaxed(), t));
+	return new_clk;
+}
+
 #ifdef __cplusplus
 }
 #endif
